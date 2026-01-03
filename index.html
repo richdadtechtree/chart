@@ -4,23 +4,23 @@
     <meta charset="UTF-8">
     <title>부동산 매매/전세 차트 대시보드</title>
     <style>
-        /* (위에서 드린 스타일과 동일하므로 생략, 디자인은 유지됩니다) */
         :root { --primary-color: #2c3e50; --accent-color: #3498db; --bg-color: #f4f7f6; }
-        body { font-family: 'Pretendard', sans-serif; background-color: var(--bg-color); padding: 20px; }
-        header { text-align: center; margin-bottom: 40px; }
+        body { font-family: 'Pretendard', sans-serif; background-color: var(--bg-color); padding: 20px; margin: 0; }
+        header { text-align: center; margin-bottom: 40px; padding: 20px; }
         .search-container { max-width: 600px; margin: 0 auto 30px; display: flex; }
-        #searchInput { flex: 1; padding: 12px; border: 2px solid #ddd; border-radius: 8px; }
-        .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; max-width: 1200px; margin: 0 auto; }
-        .apt-card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: 0.2s; text-decoration: none; color: inherit; border: 2px solid transparent; display: block; }
-        .apt-card:hover { transform: translateY(-5px); border-color: var(--accent-color); }
-        .tag { display: inline-block; background: #e1f5fe; color: #01579b; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; margin-top: 10px; margin-right: 5px; }
+        #searchInput { flex: 1; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px; }
+        .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; max-width: 1200px; margin: 0 auto; }
+        .apt-card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: 0.3s; text-decoration: none; color: inherit; border: 2px solid transparent; text-align: center; }
+        .apt-card:hover { transform: translateY(-5px); border-color: var(--accent-color); box-shadow: 0 8px 15px rgba(0,0,0,0.15); }
+        .apt-card h3 { margin: 0; font-size: 1.25rem; word-break: break-all; }
+        .tag { display: inline-block; background: #eef2f3; color: #7f8c8d; padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; margin-top: 15px; }
     </style>
 </head>
 <body>
 
 <header>
-    <h1>🏢 부동산 단지 데이터 자동 로드</h1>
-    <p>JSON 데이터를 기반으로 대시보드를 구성합니다.</p>
+    <h1>🏢 부동산 단지 차트 저장소</h1>
+    <p>GitHub의 파일을 자동으로 스캔하여 대시보드를 구성합니다.</p>
 </header>
 
 <div class="search-container">
@@ -28,47 +28,60 @@
 </div>
 
 <div class="dashboard-grid" id="aptGrid">
-    </div>
+    <p id="loadingMsg">데이터를 불러오는 중입니다...</p>
+</div>
 
 <script>
-    let aptData = []; // 데이터를 담을 배열
+    // 본인의 GitHub 정보를 입력하세요
+    const USERNAME = "richdadtechtree"; 
+    const REPO = "chart"; 
+    const API_URL = `https://api.github.com/repos/${USERNAME}/${REPO}/contents/`;
 
-    // 1. JSON 파일 로드하기
-    async function loadApts() {
+    let htmlFiles = [];
+
+    async function fetchRepoFiles() {
         try {
-            const response = await fetch('data.json');
-            aptData = await response.json();
-            renderCards(aptData);
+            const response = await fetch(API_URL);
+            const files = await response.json();
+            
+            // .html 파일만 필터링 (index.html 제외)
+            htmlFiles = files.filter(file => 
+                file.name.endsWith('.html') && file.name !== 'index.html'
+            );
+
+            renderCards(htmlFiles);
         } catch (error) {
-            console.error("데이터를 불러오는데 실패했습니다:", error);
-            document.getElementById('aptGrid').innerHTML = "<p>데이터 로딩 실패. data.json 파일을 확인하세요.</p>";
+            console.error("GitHub API 호출 실패:", error);
+            document.getElementById('aptGrid').innerHTML = "<p>데이터를 불러오지 못했습니다. 레포지토리가 공개(Public) 상태인지 확인하세요.</p>";
         }
     }
 
-    // 2. 카드 HTML 생성 및 렌더링
-    function renderCards(data) {
+    function renderCards(files) {
         const grid = document.getElementById('aptGrid');
-        grid.innerHTML = data.map(apt => `
-            <a href="${apt.file}" class="apt-card">
-                <h3>${apt.name}</h3>
-                <p>${apt.location}</p>
-                <div>${apt.tags.map(tag => `<span class="tag">${tag}</span>`).join('')}</div>
-            </a>
-        `).join('');
+        if (files.length === 0) {
+            grid.innerHTML = "<p>등록된 단지 파일이 없습니다.</p>";
+            return;
+        }
+
+        grid.innerHTML = files.map(file => {
+            // 파일명에서 .html 확장자 제거하여 제목으로 사용
+            const displayName = file.name.replace('.html', '');
+            return `
+                <a href="${file.name}" class="apt-card">
+                    <h3>${displayName}</h3>
+                    <span class="tag">차트 보기</span>
+                </a>
+            `;
+        }).join('');
     }
 
-    // 3. 검색 필터 기능
     function filterCards() {
         const query = document.getElementById('searchInput').value.toUpperCase();
-        const filtered = aptData.filter(apt => 
-            apt.name.toUpperCase().includes(query) || 
-            apt.location.toUpperCase().includes(query)
-        );
+        const filtered = htmlFiles.filter(file => file.name.toUpperCase().includes(query));
         renderCards(filtered);
     }
 
-    // 페이지 시작 시 로드
-    loadApts();
+    fetchRepoFiles();
 </script>
 
 </body>
